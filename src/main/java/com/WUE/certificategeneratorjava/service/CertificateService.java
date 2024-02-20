@@ -20,6 +20,7 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -29,18 +30,22 @@ public class CertificateService {
     @Autowired
     private GenerateCertificateRepository generateCertificateRepository;
 
-
     public ResponseEntity<?> generateCertificates(MultipartFile imageFile, List<List<TextWithCoordinatesDto>> data) {
         try {
-
             log.info("Reading image file");
+
+            BufferedImage image = ImageIO.read(imageFile.getInputStream());
 
             for (List<TextWithCoordinatesDto> text : data) {
 
-                BufferedImage image = ImageIO.read(imageFile.getInputStream());
+                BufferedImage jpgImage=image;
+                if(!Objects.requireNonNull(imageFile.getOriginalFilename()).contains(".jpg")){
+                    jpgImage = convertToJPEG(image);
+                }
+
                 String id = UUID.randomUUID().toString().replaceAll("-", "").substring(0, 10);
-                addTextsToImage(image, text, id);
-                byte[] imageData = convertImageToByteArray(image);
+                addTextsToImage(jpgImage, text, id);
+                byte[] imageData = convertImageToByteArray(jpgImage);
                 Certificate certificate = new Certificate();
                 certificate.setImageData(imageData);
                 certificate.setId(id);
@@ -54,8 +59,13 @@ public class CertificateService {
         }
     }
 
-    private void addTextsToImage(BufferedImage image, List<TextWithCoordinatesDto> data, String id) {
+    private BufferedImage convertToJPEG(BufferedImage image) {
+        BufferedImage convertedImage = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
+        convertedImage.createGraphics().drawImage(image, 0, 0, Color.WHITE, null);
+        return convertedImage;
+    }
 
+    private void addTextsToImage(BufferedImage image, List<TextWithCoordinatesDto> data, String id) {
         Graphics2D g2d = image.createGraphics();
         g2d.setColor(Color.BLACK);
         g2d.setFont(new Font("Arial", Font.BOLD, 40));
@@ -66,11 +76,10 @@ public class CertificateService {
             int y = text.getY();
             g2d.drawString(texts, x, y);
         }
-        g2d.drawString(id, 180, 1000);
+        g2d.drawString("Certificate ID: "+id, 180, 1000);
         g2d.dispose();
-        System.out.println("Texts added to image");
+        log.info("Texts added to image");
     }
-
 
     private byte[] convertImageToByteArray(BufferedImage image) throws IOException {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -95,5 +104,4 @@ public class CertificateService {
                 .contentType(MediaType.IMAGE_JPEG)
                 .body(resource);
     }
-
 }
